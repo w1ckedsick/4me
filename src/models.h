@@ -3,6 +3,7 @@
 #include <vector>
 #include <unordered_map>
 #include <string>
+#include <array>
 
 class MemoryTransaction{
     public:
@@ -83,15 +84,28 @@ class Core{
         // and since there's no pipeline (nor instruction buffer) - to decode and execute too
         uint16_t ip;
         // fetch stage result
+        // actually, if for some reason I decided to make more pseudo-stages, 
+        // it would be better to keep here every intermediate cross-stage results
         uint32_t fetched_instr;
+        // associated memory
         Memory *memory;
+        // register file
+        std::array<uint16_t, 16> reg;
+        // logging is enabled = verbose execution
+        bool log_en;
     public:
         // code entry point is set up in the constructor
-        Core(uint16_t ip) : ip(ip) {fetched_instr = 0xffffffff;};
+        Core(uint16_t ip, bool log_en) : ip(ip), fetched_instr(0xffffffff), reg({0}), log_en(log_en) {};
         
         void bindMemory(Memory* memory);
+
         void fetch();
-        void execute();
+        int execute();
+
+        // jumps to an instruction
+        void jump(uint16_t dst) {ip = dst;};
+
+        void printRegFile();
 
         ~Core() {};
 };

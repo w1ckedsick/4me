@@ -3,7 +3,8 @@
 #include <iostream>
 #include <fstream>
 
-const bool DEBUG = true;
+//const bool DEBUG = true;
+//const bool LOG_EN = true;
 
 /*
  * Read 2 bytes from a file
@@ -59,7 +60,7 @@ int loadMemoryRange(std::ifstream& infile, Memory& memory,const std::string name
 /*
  * Parse the given binary file and fill the simulator data classes accordingly
  */
-int parseInput(Memory& memory){
+int parseInput(Memory& memory, bool DEBUG){
     char byte;
     uint32_t index = 0;
     int ret = 0;
@@ -316,11 +317,39 @@ int parseInput(Memory& memory){
     return 0;    
 }
 
+int runSimulation(Memory& mem, bool LOG_EN){
+    int ret = 0;
+    Core core = Core(0x4, LOG_EN);
+    core.bindMemory(&mem);
+
+    // execute a code from the entry point (0x4)
+    while (1){
+        if (LOG_EN){
+            std::cout << "-----" << std::endl;
+        }
+        core.fetch();
+        ret=core.execute();
+        if (ret){
+            // got HALT, finish the simulation
+            if (ret == 2){
+                std::cout << "Wrong instruction opcode, simulation terminated" << std::endl;
+            }
+            break;
+        }
+    }
+    core.printRegFile();
+
+    return ret;
+}
+
 int main(){
+    bool DEBUG = false;
+    bool LOG_EN = true;
     Memory mem = Memory();
-    if (parseInput(mem)){
+    if (parseInput(mem, DEBUG)){
         std::cout << "There were errors during preparation, simulation aborted" << std::endl;
     }
+    runSimulation(mem, LOG_EN);
     if (DEBUG)
         mem.memoryDump();
 }

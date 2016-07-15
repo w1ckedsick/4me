@@ -239,13 +239,210 @@ void Core::bindMemory(Memory* memory){
  * Get the next instruction to execute
  */
 void Core::fetch(){
+    if (log_en)
+        std::cout << "FETCH: 0x" << std::setfill('0') << std::setw(4) << std::hex << (uint32_t)ip << std::endl;
     MemoryTransaction req = MemoryTransaction(ip, &fetched_instr, 4, 1, 0);
     memory->access(&req);
+    // next instruction has 4-byte offset
+    ip += 4;
 }
 
 /*
  * Exec stage (merged with decode, memory access and writeback, because sadly there's no pipeline)
  */
-void Core::execute(){
+int Core::execute(){
     // decode the instruction
+    uint8_t opc = 0;
+    uint8_t rd_index = 0;
+    uint8_t rs1_index = 0;
+    uint8_t rs2_index = 0;
+    uint16_t imm = 0;
+
+    if (log_en)
+        std::cout << "DECODE: 0x" << std::setfill('0') << std::setw(8) << std::hex << fetched_instr << std::endl;
+
+    opc = (uint8_t)(fetched_instr >> 28);
+    rd_index = (uint8_t)((fetched_instr >> 24) & 0xf);
+    rs1_index = (uint8_t)((fetched_instr >> 20) & 0xf);
+    rs2_index = (uint8_t)((fetched_instr >> 16) & 0xf);
+    imm = (uint16_t)(fetched_instr & 0xffff);
+
+    uint16_t dummy = 0;
+    // a case of dedicated r0 which cannot be written, create a link to a dummy stack variable
+    uint16_t &rd  = rd_index ? reg[rd_index] : dummy;
+    uint16_t &rs1 = reg[rs1_index];
+    uint16_t &rs2 = reg[rs2_index];
+
+    if (log_en)
+        std::cout << "EXECUTE: opc=0x" << std::hex << (uint32_t)opc
+                  << ", dest=r" << std::dec << (uint32_t)rd_index 
+                  << " 0x" << std::setfill('0') << std::setw(4) << std::hex << (uint32_t)rd //<< "]"
+                  << ", src1=r" << std::dec << (uint32_t)rs1_index 
+                  << " 0x" << std::setfill('0') << std::setw(4) << std::hex << (uint32_t)rs1 //<< "]"
+                  << ", src2=r" << std::dec << (uint32_t)rs2_index 
+                  << " 0x" << std::setfill('0') << std::setw(4) << std::hex << (uint32_t)rs2 //<< "]"
+                  << ", imm=0x" << std::setfill('0') << std::setw(4) << std::hex << (uint32_t)imm << std::endl;
+    
+
+    // execute
+    switch (opc){
+        case 0x0:
+            // ADD
+            rd = rs1 + (rs2 | imm);
+            break;
+        case 0x1:
+            // SUB
+            rd = rs1 - (rs2 | imm);
+            break;
+        case 0x2:
+            // MUL
+            rd = (int16_t)rs1 * (int16_t)(rs2 | imm);
+            break;
+        case 0x3:
+            // MODU
+            rd = rs1 % (rs2 | imm);
+            break;
+        case 0x4:
+            // DIV
+            rd = (int16_t)rs1 / (int16_t)(rs2 | imm);
+            break;
+        case 0x5:
+            // DIVU
+            rd = rs1 / (rs2 | imm);
+            break;
+        case 0x6:
+            // ORNOT
+            rd = rs1 | ~(rs2 | imm);
+            break;
+        case 0x7:
+            // AND
+            rd = rs1 & (rs2 | imm);
+            break;
+        case 0x8:
+            // LSL
+            rd = rs1 << (rs2 | imm);
+            break;
+        case 0x9:
+            // LSR
+            rd = rs1 >> (rs2 | imm);
+            break;
+        case 0xa:
+            // ASR
+            rd = (int16_t)rs1 >> (rs2 | imm);
+            break;
+        case 0xb:
+            // CMP
+            switch (imm){
+                case 0x0:
+                    // EQ
+                    rd = rs1 == rs2 ? 0 : 1;
+                    break;
+                case 0x1:
+                    // NE
+                    rd = rs1 != rs2 ? 0 : 1;
+                    break;
+                case 0x2:
+                    // BN
+                    rd = rs1 & rs2 ? 0 : 1;
+                    break;
+                case 0x3:
+                    // BS
+                    rd = !(rs1 & rs2) ? 0 : 1;
+                    break;
+                case 0x4:
+                    // LS
+                    rd = (int16_t)rs1 < (int16_t)rs2 ? 0 : 1;
+                    break;
+                case 0x5:
+                    // GT
+                    rd = (int16_t)rs1 > (int16_t)rs2 ? 0 : 1;
+                    break;
+                case 0x6:
+                    // GE
+                    rd = (int16_t)rs1 >= (int16_t)rs2 ? 0 : 1;
+                    break;
+                case 0x7:
+                    // LE
+                    rd = (int16_t)rs1 <= (int16_t)rs2 ? 0 : 1;
+                    break;
+                case 0x8:
+                    // BL
+                    rd = rs1 < rs2 ? 0 : 1;
+                    break;
+                case 0x9:
+                    // AB
+                    rd = rs1 > rs2 ? 0 : 1;
+                    break;
+                case 0xa:
+                    // BE
+                    rd = rs1 <= rs2 ? 0 : 1;
+                    break;
+                case 0xb:
+                    // AE
+                    rd = rs1 >= rs2 ? 0 : 1;
+                    break;
+                default:
+                    return 2;
+                    break;
+            }
+            break;
+        case 0xc:
+            // BRN
+            rd = ip + 4;
+            if (!rs1){
+                uint16_t jump_dst = rs2 | imm;
+                if (jump_dst & 0x3)
+                    // Got HALT
+                    return 1;
+                else
+                    jump(jump_dst);
+            }
+            break;
+        case 0xd:{
+            // LD
+            uint32_t buf; //TODO
+            MemoryTransaction req = MemoryTransaction(imm + rs1 + rs2, (uint32_t*)&buf/*&rd*/, 2, 0, 0);
+            memory->access(&req);
+            rd = (uint16_t)(buf & 0xffff);
+            if (log_en)
+                std::cout << "WRITEBACK: r" << std::dec << (uint32_t)rd_index << " <- [0x" 
+                          << std::setfill('0') << std::setw(4) << std::hex << (uint32_t)req.addr << "] = 0x"
+                          << std::setfill('0') << std::setw(4) << std::hex << (uint32_t)rd << std::endl;
+            break;
+        }
+        case 0xe:{
+            // ST
+            uint32_t buf = (uint32_t)rd; //TODO
+            MemoryTransaction req = MemoryTransaction(imm + rs1 + rs2, (uint32_t*)&buf/*&rd*/, 2, 0, 1);
+            memory->access(&req);
+            if (log_en)
+                std::cout << "WRITEBACK: [0x" << std::setw(4) << std::hex << (uint32_t)req.addr << "] <- 0x" 
+                          << std::setfill('0') << std::setw(4) << std::hex << (uint32_t)rd << std::endl;
+            break;
+        }
+        default:
+            return 2;
+            break;
+    }
+
+    if (log_en && (opc < 0xd))
+        std::cout << "WRITEBACK: r" << std::dec << (uint32_t)rd_index << " <- 0x" 
+                  << std::setfill('0') << std::setw(4) << std::hex << (uint32_t)rd << std::endl;
+
+
+    return 0;
+}
+
+/*
+ * Prints core's register file
+ */
+void Core::printRegFile(){
+    std::cout << "-====== Register File ======-" << std::endl;
+    for (size_t i = 0; i < 16; ++i){
+        std::cout << "r" << i
+                  << ":  0x" << std::setfill('0') << std::setw(4) << std::hex << (uint32_t)reg[i] 
+                  << std::endl;
+        
+    }
+    std::cout << "-===========================-" << std::endl;
 }
