@@ -26,11 +26,42 @@ int readParam(std::ifstream& infile, uint16_t& param){
 }
 
 /*
+ * Read a section from a file and write data to a corresponding memory region
+ */
+int loadMemoryRange(std::ifstream& infile, Memory& memory,const std::string name, uint16_t size){
+    uint16_t addr = 0;
+    char byte = 0;
+    uint16_t cnt = 0;
+
+    MemoryRange* range = memory.getRangeByName(name);
+    if (range == nullptr){
+        return 1;
+    }
+    addr = range->getStart();
+    MemoryTransaction req = MemoryTransaction(addr, (uint32_t*)&byte, 1, 0, 1);
+    // read and write to memory byte by byte because why not, overall size is not that big anyways
+    while (cnt < size){
+        if (infile.get(byte)){
+            req.addr = addr;
+            range->directAccess(&req);
+            addr++;
+            cnt++;
+        }
+        else{
+            break;
+        }
+    }
+    if (size != cnt)
+        return 2;
+    return 0;
+}
+
+/*
  * Parse the given binary file and fill the simulator data classes accordingly
  */
 int parseInput(Memory& memory){
     char byte;
-    int index = 0;
+    uint32_t index = 0;
     int ret = 0;
     char header[4] = {0};
     std::ifstream infile("input", std::ios::binary);
@@ -190,34 +221,49 @@ int parseInput(Memory& memory){
     // as we've got to this point, everyting shall be correct
     // create described memory regions and add them to the memory map
     ret = 0;
+    uint16_t border_hi = 0xffff;
     MemoryRange* range;
 
-    // dedicated first segment
-    range = new MemoryRange(0, 3, 0, "reserved");
+    // I/O section
+    range = new MemoryRange(0xf000, border_hi, 8, "i/o");
     ret += memory.registerMemoryRange(range);
-
-    // code section
-    range = new MemoryRange(4, cdata - 1, 5, "code");
-    ret += memory.registerMemoryRange(range);
-
-    // constant data section
-    range = new MemoryRange(cdata, smc - 1, 4, "cdata");
-    ret += memory.registerMemoryRange(range);
-
-    // aux code section
-    range = new MemoryRange(smc, data - 1, 4, "smc");
-    ret += memory.registerMemoryRange(range);
-
-    // data section
-    range = new MemoryRange(data, mem - 1, 4, "data");
-    ret += memory.registerMemoryRange(range);
+    border_hi = 0xefff;
 
     // heap section
-    range = new MemoryRange(mem, 0xefff, 4, "heap");
-    ret += memory.registerMemoryRange(range);
+    if (mem_nz){
+        range = new MemoryRange(mem, 0xefff, 6, "heap");
+        ret += memory.registerMemoryRange(range);
+        border_hi = mem - 1;
+    }
 
-    // I/O section
-    range = new MemoryRange(0xf000, 0xffff, 4, "i/o");
+    // data section
+    if (data_nz){
+        range = new MemoryRange(data, border_hi, 6, "data");
+        ret += memory.registerMemoryRange(range);
+        border_hi = data - 1;
+    }
+
+    // aux code section
+    if (smc_nz){
+        range = new MemoryRange(smc, border_hi, 7, "smc");
+        ret += memory.registerMemoryRange(range);
+        border_hi = smc - 1;
+    }
+
+    // constant data section
+    if (cdata_nz){
+        range = new MemoryRange(cdata, border_hi, 4, "cdata");
+        ret += memory.registerMemoryRange(range);
+        border_hi = cdata - 1;
+    }
+
+    // code section
+    range = new MemoryRange(4, border_hi, 5, "code");
+    ret += memory.registerMemoryRange(range);
+    border_hi = 3;
+
+    // reserved first segment
+    range = new MemoryRange(0, border_hi, 0, "reserved");
     ret += memory.registerMemoryRange(range);
 
     if (ret){
@@ -228,23 +274,43 @@ int parseInput(Memory& memory){
 
 
     // fill the memory with pre-defined data from the file
-    uint16_t addr = 0;
+    ret = 0;
 
     // code section
+    ret = loadMemoryRange(infile, memory, "code", code_sz);
+    if (ret){
+        if (ret == 2) std::cout << "Insufficient data in the file, code section" << std::endl;
+        else          std::cout << "Cannot locate previously registered memory range 'code'" << std::endl;
+        infile.close();
+        return 1;
+    }
+    // cdata section
+    ret = loadMemoryRange(infile, memory, "cdata", cdata_sz);
+    if (ret){
+        if (ret == 2) std::cout << "Insufficient data in the file, cdata section" << std::endl;
+        else          std::cout << "Cannot locate previously registered memory range 'cdata'" << std::endl;
+        infile.close();
+        return 1;
+    }
+    // data section
+    ret = loadMemoryRange(infile, memory, "data", data_sz);
+    if (ret){
+        if (ret == 2) std::cout << "Insufficient data in the file, data section" << std::endl;
+        else          std::cout << "Cannot locate previously registered memory range 'data'" << std::endl;
+        infile.close();
+        return 1;
+    }
+    // dbg section
     index = 0;
-    addr = 0x4;
-    MemoryTransaction req = MemoryTransaction(addr, (uint32_t*)&byte, 1, 1, 1);
-    
-/*    while (index < code_sz){
-        if (infile.get(byte)){
-            memory.access(&req);
-            addr++;
-            index++;
-        }
-        else{
-            break;
-        }
-    }*/
+    while (index < dbg_sz){
+        if (infile.get(byte)) index++;
+        else                  break;
+    }
+    if (dbg_sz != index){
+        std::cout << "Insufficient data in the file, dbg section" << std::endl;
+        infile.close();
+        return 1;
+    }
 
     infile.close();
     return 0;    
@@ -252,5 +318,9 @@ int parseInput(Memory& memory){
 
 int main(){
     Memory mem = Memory();
-    parseInput(mem);
+    if (parseInput(mem)){
+        std::cout << "There were errors during preparation, simulation aborted" << std::endl;
+    }
+    if (DEBUG)
+        mem.memoryDump();
 }

@@ -6,5 +6,5 @@ class MemoryRange;
 
 class Memory;
 
-class Cpu;
+class Core;
 #endif
