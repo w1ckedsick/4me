@@ -3,7 +3,7 @@
 #include <map>
 #include <iostream>
 #include <iomanip>
-
+/*
 MemoryRange::MemoryRange(uint16_t start, uint16_t end, uint8_t mode, const std::string &name){
     if (end < start){
         throw std::invalid_argument("memory range end < start");
@@ -27,7 +27,7 @@ MemoryRange::MemoryRange(uint16_t start, uint16_t end, uint8_t mode, const std::
         special = true;
     }
     this->name = name;
-}
+}*/
 
 uint16_t MemoryRange::getStart(){
     return start;
@@ -69,60 +69,26 @@ void MemoryRange::checkAccessPermissions(MemoryTransaction *req){
 void MemoryRange::directAccess(MemoryTransaction *req){
     // access to a memory cell with no respect to permissions
     uint8_t size = req->size;
-    if (size == 1){
-        if (req->iswrite){
-            memory[req->addr] = (uint8_t)((*req->buf) & 0xff);
-        }
-        else{
-            auto it = memory.find(req->addr);
-            *req->buf = it == memory.end() ? (uint32_t)getUninitMem() : (uint32_t)it->second;
-        }
+    if (size > 4){
+        throw std::invalid_argument("Memory request size must be <= 4");
     }
-    else
-    if (size == 2){
-        if (req->iswrite){
-            memory[req->addr] = (uint8_t)((*req->buf >> 8) & 0xff);
-            memory[req->addr + 1] = (uint8_t)(*req->buf & 0xff);
-        }
-        else{
-            std::unordered_map<uint16_t, uint8_t>::const_iterator it;
-            uint32_t buf;
-            it = memory.find(req->addr);
-            buf = it == memory.end() ? (uint32_t)getUninitMem() : (uint32_t)it->second;
-            it = memory.find(req->addr + 1);
-            buf <<= 8;
-            buf += it == memory.end() ? (uint32_t)getUninitMem() : (uint32_t)it->second;
-            *req->buf = buf;
-        }
-    }
-    else
-    if (size == 4){
-        if (req->iswrite){
-            memory[req->addr] = (uint8_t)((*req->buf >> 24) & 0xff);
-            memory[req->addr + 1] = (uint8_t)((*req->buf >> 16) & 0xff);
-            memory[req->addr + 2] = (uint8_t)((*req->buf >> 8) & 0xff);
-            memory[req->addr + 3] = (uint8_t)(*req->buf & 0xff);
-        }
-        else{
-            std::unordered_map<uint16_t, uint8_t>::const_iterator it;
-            uint32_t buf;
-            it = memory.find(req->addr);
-            buf = it == memory.end() ? (uint32_t)getUninitMem() : (uint32_t)it->second;
-            it = memory.find(req->addr + 1);
-            buf <<= 8;
-            buf += it == memory.end() ? (uint32_t)getUninitMem() : (uint32_t)it->second;
-            it = memory.find(req->addr + 2);
-            buf <<= 8;
-            buf += it == memory.end() ? (uint32_t)getUninitMem() : (uint32_t)it->second;
-            it = memory.find(req->addr + 3);
-            buf <<= 8;
-            buf += it == memory.end() ? (uint32_t)getUninitMem() : (uint32_t)it->second;
-            *req->buf = buf;
+
+    if (req->iswrite){
+        for (uint16_t i = 0; i < req->size; i++){
+            memory[req->addr + i] = (uint8_t)((*req->buf >> ((size - i - 1)*8)) & 0xff);
         }
     }
     else{
-        throw std::invalid_argument("Size shall be 1,2 or 4");
+        uint32_t buf = 0;
+        for (uint16_t i = 0; i < req->size; i++){
+            auto it = memory.find(req->addr + i);
+            buf <<= 8;
+            buf |= it == memory.end() ? (uint32_t)getUninitMem() : (uint32_t)it->second;
+        }
+        *req->buf = buf;
     }
+
+    
 }
 
 // access to a memory cell with all the respect to permissions

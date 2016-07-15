@@ -40,7 +40,16 @@ class MemoryRange{
         uint16_t end;
         std::unordered_map<uint16_t, uint8_t> memory;
     public:
-        MemoryRange(uint16_t start, uint16_t end, uint8_t mode, const std::string &name);
+        MemoryRange(uint16_t start, uint16_t end, uint8_t mode, const std::string &name) :
+            name(name),
+            readable(mode & 0x4),
+            writeable(mode & 0x2),
+            executable(mode & 0x1),
+            special(mode & 0x8),
+            start(start),
+            end(end)
+            {};
+            
 
         uint16_t getStart();
         uint16_t getEnd();
