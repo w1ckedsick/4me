@@ -2,9 +2,7 @@
 #include "models.h"
 #include <iostream>
 #include <fstream>
-
-//const bool DEBUG = true;
-//const bool LOG_EN = true;
+#include <algorithm>
 
 /*
  * Read 2 bytes from a file
@@ -286,7 +284,10 @@ int parseInput(Memory& memory, bool DEBUG){
         return 1;
     }
     // cdata section
-    ret = loadMemoryRange(infile, memory, "cdata", cdata_sz);
+    if (cdata_nz)
+        ret = loadMemoryRange(infile, memory, "cdata", cdata_sz);
+    else
+        ret = 0;
     if (ret){
         if (ret == 2) std::cout << "Insufficient data in the file, cdata section" << std::endl;
         else          std::cout << "Cannot locate previously registered memory range 'cdata'" << std::endl;
@@ -294,7 +295,10 @@ int parseInput(Memory& memory, bool DEBUG){
         return 1;
     }
     // data section
-    ret = loadMemoryRange(infile, memory, "data", data_sz);
+    if (data_nz)
+        ret = loadMemoryRange(infile, memory, "data", data_sz);
+    else
+        ret = 0;
     if (ret){
         if (ret == 2) std::cout << "Insufficient data in the file, data section" << std::endl;
         else          std::cout << "Cannot locate previously registered memory range 'data'" << std::endl;
@@ -313,6 +317,12 @@ int parseInput(Memory& memory, bool DEBUG){
         return 1;
     }
 
+    if (infile.get(byte)){
+        std::cout << "Excessive data in the file" << std::endl;
+        infile.close();
+        return 1;
+    }
+
     infile.close();
     return 0;    
 }
@@ -327,12 +337,24 @@ int runSimulation(Memory& mem, bool LOG_EN){
         if (LOG_EN){
             std::cout << "-----" << std::endl;
         }
-        core.fetch();
-        ret=core.execute();
+        try{
+            core.fetch();
+            ret=core.execute();
+        }
+        catch (const std::domain_error& ex){
+            std::cout << "Memory access error: " << ex.what() << std::endl;
+            ret = 3;
+        }
         if (ret){
-            // got HALT, finish the simulation
             if (ret == 2){
-                std::cout << "Wrong instruction opcode, simulation terminated" << std::endl;
+                std::cout << "Wrong instruction opcode" << std::endl;
+            }
+            if (ret == 1){
+                // got HALT, the only good simulation finish condition
+                std::cout << "Got HALT, finishing simulation" << std::endl;
+            }
+            else{
+                std::cout << "Simulation terminated due to errors" << std::endl;
             }
             break;
         }
@@ -342,14 +364,23 @@ int runSimulation(Memory& mem, bool LOG_EN){
     return ret;
 }
 
-int main(){
-    bool DEBUG = false;
-    bool LOG_EN = true;
+bool checkForOption(char **start, char **end, const std::string &option){
+    return std::find(start, end, option) != end;
+
+}
+
+int main(int argc, char *argv[]){
+    bool DEBUG = checkForOption(argv, argv + argc, "debug");
+    bool LOG_EN = checkForOption(argv, argv + argc, "log");
+
     Memory mem = Memory();
     if (parseInput(mem, DEBUG)){
-        std::cout << "There were errors during preparation, simulation aborted" << std::endl;
+        std::cout << "There were errors during preparation process, simulation aborted" << std::endl;
+        return 1;
     }
     runSimulation(mem, LOG_EN);
     if (DEBUG)
         mem.memoryDump();
+
+    return 0;
 }

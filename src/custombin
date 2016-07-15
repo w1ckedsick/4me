@@ -2,7 +2,7 @@
 # header
 echo -n -e Toy1 > input
 # code_sz
-echo -n -e \\x00\\x24 >> input
+echo -n -e \\x00\\x3c >> input
 # cdata
 echo -n -e \\x01\\x00 >> input
 # cdata_sz
@@ -27,6 +27,16 @@ echo -n -e \\xe3\\x20\\x02\\x01 >> input
 echo -n -e \\xd2\\x10\\x02\\x01 >> input
 echo -n -e \\xd1\\x00\\x02\\x01 >> input
 echo -n -e \\x04\\x12\\x00\\x01 >> input
+
+echo -n -e \\x06\\x00\\xff\\xeb >> input
+echo -n -e \\x47\\x60\\x00\\x04 >> input
+echo -n -e \\x58\\x60\\x00\\x04 >> input
+
+echo -n -e \\x09\\x00\\xff\\xf7 >> input
+echo -n -e \\x9a\\x90\\x00\\x01 >> input
+echo -n -e \\xab\\x90\\x00\\x01 >> input
+
+
 echo -n -e \\xc5\\x00\\x00\\x01 >> input
 
 # == CDATA ==

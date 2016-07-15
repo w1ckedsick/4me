@@ -2,32 +2,8 @@
 #include <string>
 #include <map>
 #include <iostream>
+#include <sstream>
 #include <iomanip>
-/*
-MemoryRange::MemoryRange(uint16_t start, uint16_t end, uint8_t mode, const std::string &name){
-    if (end < start){
-        throw std::invalid_argument("memory range end < start");
-    }
-    this->start = start;
-    this->end = end;
-    executable = false;
-    writeable = false;
-    executable = false;
-    special = false;
-    if (mode & 0x1){
-        executable = true;
-    }
-    if (mode & 0x2){
-        writeable = true;
-    }
-    if (mode & 0x4){
-        readable = true;
-    }
-    if (mode & 0x8){
-        special = true;
-    }
-    this->name = name;
-}*/
 
 uint16_t MemoryRange::getStart(){
     return start;
@@ -54,13 +30,19 @@ void MemoryRange::checkAccessPermissions(MemoryTransaction *req){
     }
     else{
         if (req->iswrite && !writeable){
-            throw std::domain_error("Memory write is not granted");
+            std::stringstream addrstr;
+            addrstr << "0x" << std::hex << req->addr;
+            throw std::domain_error("Memory write is not granted: " + addrstr.str());
         }
         if (!(req->iswrite) && !readable){
-            throw std::domain_error("Memory read is not granted");
+            std::stringstream addrstr;
+            addrstr << "0x" << std::hex << req->addr;
+            throw std::domain_error("Memory read is not granted: " + addrstr.str());
         }
         if (!(req->iswrite) && req->exec && !executable){
-            throw std::domain_error("Instruction fetch is not granted");
+            std::stringstream addrstr;
+            addrstr << "0x" << std::hex << req->addr;
+            throw std::domain_error("Instruction fetch is not granted: " + addrstr.str());
         }
     }
     
@@ -366,7 +348,7 @@ int Core::execute(){
             break;
         case 0xd:{
             // LD
-            uint32_t buf; //TODO
+            uint32_t buf; //TODO get rid of this variable
             MemoryTransaction req = MemoryTransaction(imm + rs1 + rs2, (uint32_t*)&buf/*&rd*/, 2, 0, 0);
             memory->access(&req);
             rd = (uint16_t)(buf & 0xffff);
@@ -378,7 +360,7 @@ int Core::execute(){
         }
         case 0xe:{
             // ST
-            uint32_t buf = (uint32_t)rd; //TODO
+            uint32_t buf = (uint32_t)rd; //TODO get rid of this variable
             MemoryTransaction req = MemoryTransaction(imm + rs1 + rs2, (uint32_t*)&buf/*&rd*/, 2, 0, 1);
             memory->access(&req);
             if (log_en)
@@ -405,7 +387,7 @@ int Core::execute(){
 void Core::printRegFile(){
     std::cout << "-====== Register File ======-" << std::endl;
     for (size_t i = 0; i < 16; ++i){
-        std::cout << "r" << i
+        std::cout << "r" << std::dec << i
                   << ":  0x" << std::setfill('0') << std::setw(4) << std::hex << (uint32_t)reg[i] 
                   << std::endl;
         

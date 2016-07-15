@@ -1,0 +1,59 @@
+#!/bin/bash
+# header
+echo -n -e Toy1 > input
+# code_sz
+#echo -n -e \\x00\\x40 >> input
+python translate.py size code.asm input
+if [ $? -ne 0 ]; then
+    exit 1
+fi
+# cdata
+echo -n -e \\x01\\x00 >> input
+# cdata_sz
+echo -n -e \\x00\\x00 >> input
+# smc
+echo -n -e \\x00\\x00 >> input
+# data
+echo -n -e \\x02\\x00 >> input
+# data_sz
+echo -n -e \\x00\\x03 >> input
+# mem
+echo -n -e \\x03\\x00 >> input
+# dbg_sz
+echo -n -e \\x00\\x0a >> input
+
+# == CODE ==
+#echo -n -e \\x02\\x00\\x00\\x03 >> input 
+#echo -n -e \\x01\\x00\\x00\\x04 >> input
+#echo -n -e \\x03\\x12\\x00\\x00 >> input
+#echo -n -e \\xe3\\x20\\x02\\x02 >> input
+#echo -n -e \\xe3\\x20\\x02\\x01 >> input
+#echo -n -e \\xd2\\x10\\x02\\x01 >> input
+#echo -n -e \\xd1\\x00\\x02\\x01 >> input
+#echo -n -e \\x04\\x12\\x00\\x01 >> input
+
+#echo -n -e \\x06\\x00\\xff\\xeb >> input
+#echo -n -e \\x47\\x60\\x00\\x04 >> input
+#echo -n -e \\x58\\x60\\x00\\x04 >> input
+
+#echo -n -e \\x09\\x00\\xff\\xf7 >> input
+#echo -n -e \\x9a\\x90\\x00\\x01 >> input
+#echo -n -e \\xab\\x90\\x00\\x01 >> input
+
+python translate.py trans code.asm input
+if [ $? -ne 0 ]; then
+    exit 1
+fi
+
+#echo -n -e \\xc5\\x00\\x00\\x01 >> input
+
+# == CDATA ==
+
+# == DATA == 
+echo -n -e \\x00\\x00\\x03 >> input
+
+# == DBG ==
+echo -n -e \\xde\\xad\\xbe\\xef\\x42 >> input
+echo -n -e \\xde\\xad\\xbe\\xef\\x42 >> input
+
+#echo -n -e \\x\\x\\x\\x >> input
